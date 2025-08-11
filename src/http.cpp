@@ -1921,27 +1921,39 @@ void PoolHttpConnection::onBackendQueryCurrentEffort(rapidjson::Document &docume
   );
 }
 
-void PoolHttpConnection::onBackendQueryMinerCurrentEffort(rapidjson::Document &document) {
-  std::string coin, user, worker; bool hasWorker = false;
-  if (!jsonTakeString(document, "coin", coin) || !jsonTakeString(document, "user", user)) {
-    sendJsonStatus("json_format_error"); return;
-  }
-  if (jsonTakeStringOptional(document, "worker", worker)) hasWorker = true;
+void PoolHttpConnection::onBackendQueryMinerCurrentEffort(rapidjson::Document &document)
+{
+  std::string coin, user, worker;
+  bool ok = true;
 
-  PoolBackend *backend = Server_.backend(coin);
-  if (!backend || !backend->accountingDb()) { sendJsonStatus("not_found"); return; }
+  jsonParseString(document, "coin", coin, &ok);
+  jsonParseString(document, "user", user, &ok);
+  // optional worker
+  if (document.HasMember("worker")) {
+    jsonParseString(document, "worker", worker, "", &ok);
+  }
+
+  if (!ok) { replyWithStatus("json_format_error"); return; }
+
+  PoolBackend *backend = findBackendByName(coin);
+  if (!backend || !backend->accountingDb()) { replyWithStatus("not_found"); return; }
 
   backend->accountingDb()->queryMinerCurrentEffort(
-    user, hasWorker ? &worker : nullptr,
-    [this, coin, user, worker, hasWorker](double accumulatedWork, double expectedWork, double effort) {
-      xmstream stream; JSON::Object o(stream);
-      o.addString("status","ok"); o.addString("coin", coin.c_str());
-      o.addString("user", user.c_str()); if (hasWorker) o.addString("worker", worker.c_str());
-      o.addDouble("accumulatedWork", accumulatedWork);
-      o.addDouble("expectedWork", expectedWork);
-      o.addDouble("effort", effort);
-      o.addDouble("effortPercent", effort*100.0);
-      stream.write('\n'); send200(stream);
+    user,
+    document.HasMember("worker") ? &worker : nullptr,
+    [&, coin](double accumulatedWork, double expectedWork, double effort) {
+      xmstream stream;
+      {
+        JSON::Object root(stream);
+        root.addString("status", "ok");
+        root.addString("coin", coin);
+        root.addDouble("accumulatedWork", accumulatedWork);
+        root.addDouble("expectedWork", expectedWork);
+        root.addDouble("effort", effort);
+        root.addDouble("effortPercent", effort*100.0);
+      }
+      stream.write('\n');
+      reply200(stream);
     }
   );
 }
