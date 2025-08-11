@@ -1920,8 +1920,8 @@ void PoolHttpConnection::onBackendQueryCurrentEffort(rapidjson::Document &docume
         root.addDouble("expectedWork", fnormalize(expected));
         //root.addDouble("effort", fnormalize(effort));           // ratio, e.g. 0.736
         //root.addDouble("effortPercent", fnormalize(effort*100)); // e.g. 73.6
-        root.addDouble("effort", roundTo(eff, 12));
-        root.addDouble("effortPercent", roundTo(eff*100, 9));
+        root.addDouble("effort", roundTo(effort, 12));
+        root.addDouble("effortPercent", roundTo(effort*100, 9));
       }
       finishChunk(stream, offset);
       aioWrite(Socket_, stream.data(), stream.sizeOf(), afWaitAll, 0, writeCb, this);
@@ -1959,7 +1959,7 @@ void PoolHttpConnection::onBackendQueryMinerCurrentEffort(rapidjson::Document &d
   backend->accountingDb()->queryMinerCurrentEffort(
       user,
       hasWorker ? &worker : nullptr,   // <- pointer (or nullptr), not std::optional
-      [this, coin, user, worker, hasWorker](double acc, double exp, double eff) {
+      [this, coin, user, worker, hasWorker](double acc, double exp, double effort) {
         xmstream stream;
         reply200(stream);
         size_t offset = startChunk(stream);
@@ -1971,10 +1971,10 @@ void PoolHttpConnection::onBackendQueryMinerCurrentEffort(rapidjson::Document &d
           if (hasWorker) root.addString("worker", worker);
           root.addDouble("accumulatedWork", fnormalize(acc));
           root.addDouble("expectedWork",    fnormalize(exp));
-          //root.addDouble("effort",          fnormalize(eff));
-          //root.addDouble("effortPercent",   fnormalize(eff*100));
-          root.addDouble("effort", roundTo(eff, 12));
-          root.addDouble("effortPercent", roundTo(eff*100, 9));
+          //root.addDouble("effort",          fnormalize(effort));
+          //root.addDouble("effortPercent",   fnormalize(effort*100));
+          root.addDouble("effort", roundTo(effort, 12));
+          root.addDouble("effortPercent", roundTo(effort*100, 9));
         }
         finishChunk(stream, offset);
         aioWrite(Socket_, stream.data(), stream.sizeOf(), afWaitAll, 0, writeCb, this);
