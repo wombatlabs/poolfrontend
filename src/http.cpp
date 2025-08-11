@@ -52,6 +52,7 @@ std::unordered_map<std::string, std::pair<int, PoolHttpConnection::FunctionTy>> 
   {"complexMiningStatsGetInfo", {hmPost, fnComplexMiningStatsGetInfo}},
 
   {"backendQueryCurrentEffort", {hmPost, fnBackendQueryCurrentEffort}},
+  {"backendQueryMinerCurrentEffort", {hmPost, fnBackendQueryMinerCurrentEffort}},
 };
 
 static inline bool rawcmp(Raw data, const char *operand) {
@@ -291,6 +292,7 @@ int PoolHttpConnection::onParse(HttpRequestComponent *component)
       case fnInstanceEnumerateAll : onInstanceEnumerateAll(document); break;
       case fnComplexMiningStatsGetInfo : onComplexMiningStatsGetInfo(document); break;
       case fnBackendQueryCurrentEffort: onBackendQueryCurrentEffort(document); break;
+      case fnBackendQueryMinerCurrentEffort: onBackendQueryMinerCurrentEffort(document); break;
       default:
         reply404();
         return 0;
@@ -1915,6 +1917,31 @@ void PoolHttpConnection::onBackendQueryCurrentEffort(rapidjson::Document &docume
       finishChunk(stream, offset);
       aioWrite(Socket_, stream.data(), stream.sizeOf(), afWaitAll, 0, writeCb, this);
       objectDecrementReference(aioObjectHandle(Socket_), 1);
+    }
+  );
+}
+
+void PoolHttpConnection::onBackendQueryMinerCurrentEffort(rapidjson::Document &document) {
+  std::string coin, user, worker; bool hasWorker = false;
+  if (!jsonTakeString(document, "coin", coin) || !jsonTakeString(document, "user", user)) {
+    sendJsonStatus("json_format_error"); return;
+  }
+  if (jsonTakeStringOptional(document, "worker", worker)) hasWorker = true;
+
+  PoolBackend *backend = Server_.backend(coin);
+  if (!backend || !backend->accountingDb()) { sendJsonStatus("not_found"); return; }
+
+  backend->accountingDb()->queryMinerCurrentEffort(
+    user, hasWorker ? &worker : nullptr,
+    [this, coin, user, worker, hasWorker](double accumulatedWork, double expectedWork, double effort) {
+      xmstream stream; JSON::Object o(stream);
+      o.addString("status","ok"); o.addString("coin", coin.c_str());
+      o.addString("user", user.c_str()); if (hasWorker) o.addString("worker", worker.c_str());
+      o.addDouble("accumulatedWork", accumulatedWork);
+      o.addDouble("expectedWork", expectedWork);
+      o.addDouble("effort", effort);
+      o.addDouble("effortPercent", effort*100.0);
+      stream.write('\n'); send200(stream);
     }
   );
 }
