@@ -1921,56 +1921,94 @@ void PoolHttpConnection::onBackendQueryCurrentEffort(rapidjson::Document &docume
   );
 }
 
-void PoolHttpConnection::onBackendQueryMinerCurrentEffort(rapidjson::Document &document) {
-  auto getStr = [&](const char *key, std::string &out) -> bool {
-    auto it = document.FindMember(key);
-    if (it == document.MemberEnd() || !it->value.IsString())
-      return false;
-    out.assign(it->value.GetString(), it->value.GetStringLength());
-    return true;
-  };
-
-  std::string coin, user, worker;
-  bool hasWorker = false;
-
-  if (!getStr("coin", coin) || !getStr("user", user)) {
-    this->sendJsonStatus("json_format_error");
+void PoolHttpConnection::onBackendQueryMinerCurrentEffort(rapidjson::Document &document)
+{
+  // Require: { "coin": "<coin>", "user": "<login>", ["worker":"<worker>"] }
+  if (!document.HasMember("coin") || !document["coin"].IsString() ||
+      !document.HasMember("user") || !document["user"].IsString()) {
+    replyWithStatus("json_format_error");
     return;
   }
 
-  if (auto it = document.FindMember("worker"); it != document.MemberEnd() && it->value.IsString()) {
-    worker.assign(it->value.GetString(), it->value.GetStringLength());
+  std::string coin   = document["coin"].GetString();
+  std::string user   = document["user"].GetString();
+  std::string worker;
+  bool hasWorker = false;
+  if (document.HasMember("worker") && document["worker"].IsString()) {
+    worker = document["worker"].GetString();
     hasWorker = true;
   }
 
-  PoolBackend *backend = findBackendByCoin(coin.c_str());
+  PoolBackend *backend = Server_.backend(coin);
   if (!backend || !backend->accountingDb()) {
-    this->sendJsonStatus("not_found");
+    replyWithStatus("invalid_coin");
     return;
   }
 
-  auto *acc = backend->accountingDb();
-  acc->queryMinerCurrentEffort(
+  // Async reply
+  objectIncrementReference(aioObjectHandle(Socket_), 1);
+  backend->accountingDb()->queryMinerCurrentEffort(
+      user,
+      hasWorker ? &worker : nullptr,   // <- pointer (or nullptr), not std::optional
+      [this, coin, user, worker, hasWorker](double acc, double exp, double eff) {
+        xmstream stream;
+        reply200(stream);
+        size_t offset = startChunk(stream);
+        {
+          JSON::Object root(stream);
+          root.addString("status", "ok");
+          root.addString("coin", coin);
+          root.addString("user", user);
+          if (hasWorker) root.addString("worker", worker);
+          root.addDouble("accumulatedWork", fnormalize(acc));
+          root.addDouble("expectedWork",    fnormalize(exp));
+          root.addDouble("effort",          fnormalize(eff));
+          root.addDouble("effortPercent",   fnormalize(eff*100));
+        }
+        finishChunk(stream, offset);
+        aioWrite(Socket_, stream.data(), stream.sizeOf(), afWaitAll, 0, writeCb, this);
+        objectDecrementReference(aioObjectHandle(Socket_), 1);
+      });
+}
+
+/*
+void PoolHttpConnection::onBackendQueryMinerCurrentEffort(rapidjson::Document &document)
+{
+  std::string coin, user, worker;
+  bool ok = true;
+
+  jsonParseString(document, "coin", coin, &ok);
+  jsonParseString(document, "user", user, &ok);
+  // optional worker
+  if (document.HasMember("worker")) {
+    jsonParseString(document, "worker", worker, "", &ok);
+  }
+
+  if (!ok) { replyWithStatus("json_format_error"); return; }
+
+  PoolBackend *backend = findBackendByName(coin);
+  if (!backend || !backend->accountingDb()) { replyWithStatus("not_found"); return; }
+
+  backend->accountingDb()->queryMinerCurrentEffort(
     user,
-    hasWorker ? std::optional<std::string>(worker) : std::nullopt,
-    [this](double accumulated, double expected, double effort) {
+    document.HasMember("worker") ? &worker : nullptr,
+    [&, coin](double accumulatedWork, double expectedWork, double effort) {
       xmstream stream;
       {
         JSON::Object root(stream);
-        root.addField("result");
-        {
-          JSON::Object result(stream);
-          result.addDouble("accumulatedWork", accumulated);
-          result.addDouble("expectedWork", expected);
-          result.addDouble("effort", effort);
-        }
-        root.addNull("error");
+        root.addString("status", "ok");
+        root.addString("coin", coin);
+        root.addDouble("accumulatedWork", accumulatedWork);
+        root.addDouble("expectedWork", expectedWork);
+        root.addDouble("effort", effort);
+        root.addDouble("effortPercent", effort*100.0);
       }
       stream.write('\n');
-      this->send200(stream);
+      reply200(stream);
     }
   );
 }
+*/
 
 void PoolHttpConnection::onInstanceEnumerateAll(rapidjson::Document&)
 {
