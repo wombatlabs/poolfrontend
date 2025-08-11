@@ -2,8 +2,8 @@ include(FetchContent)
 
 FetchContent_Declare(
   poolcore
-  GIT_REPOSITORY https://github.com/eXtremal-ik7/poolcore.git
-  GIT_TAG        version/0.4
+  GIT_REPOSITORY https://github.com/wombatlabs/poolcore.git
+  GIT_TAG        block-effort
   GIT_SHALLOW    1
   SOURCE_DIR     ${CMAKE_SOURCE_DIR}/../dependencies/poolcore
 )

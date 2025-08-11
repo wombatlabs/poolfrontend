@@ -72,6 +72,8 @@ private:
 
   void onComplexMiningStatsGetInfo(rapidjson::Document &document);
 
+  void onBackendQueryCurrentEffort(rapidjson::Document &document);
+
   void queryStatsHistory(StatisticDb *statistic, const std::string &login, const std::string &worker, int64_t timeFrom, int64_t timeTo, int64_t groupByInterval, int64_t currentTime);
   void replyWithStatus(const char *status);
 
@@ -122,7 +124,9 @@ private:
     fnInstanceEnumerateAll,
 
     // Complex mining stats functions
-    fnComplexMiningStatsGetInfo
+    fnComplexMiningStatsGetInfo,
+
+    fnBackendQueryCurrentEffort
   };
 
   static std::unordered_map<std::string, std::pair<int, PoolHttpConnection::FunctionTy>> FunctionNameMap_;

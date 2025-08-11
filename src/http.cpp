@@ -49,7 +49,9 @@ std::unordered_map<std::string, std::pair<int, PoolHttpConnection::FunctionTy>> 
   // Instance functions
   {"instanceEnumerateAll", {hmPost, fnInstanceEnumerateAll}},
   // Complex mining stats functions
-  {"complexMiningStatsGetInfo", {hmPost, fnComplexMiningStatsGetInfo}}
+  {"complexMiningStatsGetInfo", {hmPost, fnComplexMiningStatsGetInfo}},
+
+  {"backendQueryCurrentEffort", {hmPost, fnBackendQueryCurrentEffort}},
 };
 
 static inline bool rawcmp(Raw data, const char *operand) {
@@ -288,6 +290,7 @@ int PoolHttpConnection::onParse(HttpRequestComponent *component)
       case fnBackendPoolLuck : onBackendPoolLuck(document); break;
       case fnInstanceEnumerateAll : onInstanceEnumerateAll(document); break;
       case fnComplexMiningStatsGetInfo : onComplexMiningStatsGetInfo(document); break;
+      case fnBackendQueryCurrentEffort: onBackendQueryCurrentEffort(document); break;
       default:
         reply404();
         return 0;
@@ -1876,6 +1879,44 @@ void PoolHttpConnection::onBackendPoolLuck(rapidjson::Document &document)
     aioWrite(Socket_, stream.data(), stream.sizeOf(), afWaitAll, 0, writeCb, this);
     objectDecrementReference(aioObjectHandle(Socket_), 1);
   });
+}
+
+void PoolHttpConnection::onBackendQueryCurrentEffort(rapidjson::Document &document)
+{
+  // Require: { "coin": "btc" } (or your coin name)
+  if (!document.HasMember("coin") || !document["coin"].IsString()) {
+    replyWithStatus("json_format_error");
+    return;
+  }
+
+  std::string coin = document["coin"].GetString();
+  PoolBackend *backend = Server_.backend(coin);
+  if (!backend) {
+    replyWithStatus("invalid_coin");
+    return;
+  }
+
+  // Async query to AccountingDb → reply when ready
+  objectIncrementReference(aioObjectHandle(Socket_), 1);
+  backend->accountingDb()->queryCurrentEffort(
+    [this, coin](double accumulated, double expected, double effort) {
+      xmstream stream;
+      reply200(stream);
+      size_t offset = startChunk(stream);
+      {
+        JSON::Object root(stream);
+        root.addString("status", "ok");
+        root.addString("coin", coin);
+        root.addDouble("accumulatedWork", fnormalize(accumulated));
+        root.addDouble("expectedWork", fnormalize(expected));
+        root.addDouble("effort", fnormalize(effort));           // ratio, e.g. 0.736
+        root.addDouble("effortPercent", fnormalize(effort*100)); // e.g. 73.6
+      }
+      finishChunk(stream, offset);
+      aioWrite(Socket_, stream.data(), stream.sizeOf(), afWaitAll, 0, writeCb, this);
+      objectDecrementReference(aioObjectHandle(Socket_), 1);
+    }
+  );
 }
 
 void PoolHttpConnection::onInstanceEnumerateAll(rapidjson::Document&)
