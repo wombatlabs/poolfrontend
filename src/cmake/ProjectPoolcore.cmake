@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
   poolcore
   GIT_REPOSITORY https://github.com/wombatlabs/poolcore.git
-  GIT_TAG        block-effort
+  GIT_TAG        merged-with-block-effort
   GIT_SHALLOW    1
   SOURCE_DIR     ${CMAKE_SOURCE_DIR}/../dependencies/poolcore
 )
