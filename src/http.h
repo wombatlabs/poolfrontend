@@ -67,6 +67,9 @@ private:
   void onBackendQueryPPLNSAcc(rapidjson::Document &document);
   void onBackendUpdateProfitSwitchCoeff(rapidjson::Document &document);
   void onBackendPoolLuck(rapidjson::Document &document);
+  void onBackendPoolEffort(rapidjson::Document &document);
+  void onBackendMinerEffort(rapidjson::Document &document);
+  void onBackendWorkerEffort(rapidjson::Document &document);
 
   void onInstanceEnumerateAll(rapidjson::Document &document);
 
@@ -117,6 +120,9 @@ private:
     fnBackendQueryPPLNSAcc,
     fnBackendUpdateProfitSwitchCoeff,
     fnBackendPoolLuck,
+    fnBackendPoolEffort,
+    fnBackendMinerEffort,
+    fnBackendWorkerEffort,
 
     // Instance functions
     fnInstanceEnumerateAll,
