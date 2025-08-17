@@ -49,6 +49,9 @@ std::unordered_map<std::string, std::pair<int, PoolHttpConnection::FunctionTy>> 
   {"backendPoolEffort", {hmPost, fnBackendPoolEffort}},
   {"backendMinerEffort", {hmPost, fnBackendMinerEffort}},
   {"backendWorkerEffort", {hmPost, fnBackendWorkerEffort}},
+  {"backendCurrentRoundEffort", {hmPost, fnBackendCurrentRoundEffort}},
+  {"backendCurrentMinerEffort", {hmPost, fnBackendCurrentMinerEffort}},
+  {"backendCurrentWorkerEffort", {hmPost, fnBackendCurrentWorkerEffort}},
   // Instance functions
   {"instanceEnumerateAll", {hmPost, fnInstanceEnumerateAll}},
   // Complex mining stats functions
@@ -292,6 +295,9 @@ int PoolHttpConnection::onParse(HttpRequestComponent *component)
       case fnBackendPoolEffort : onBackendPoolEffort(document); break;
       case fnBackendMinerEffort : onBackendMinerEffort(document); break;
       case fnBackendWorkerEffort : onBackendWorkerEffort(document); break;
+      case fnBackendCurrentRoundEffort : onBackendCurrentRoundEffort(document); break;
+      case fnBackendCurrentMinerEffort : onBackendCurrentMinerEffort(document); break;
+      case fnBackendCurrentWorkerEffort : onBackendCurrentWorkerEffort(document); break;
       case fnInstanceEnumerateAll : onInstanceEnumerateAll(document); break;
       case fnComplexMiningStatsGetInfo : onComplexMiningStatsGetInfo(document); break;
       default:
@@ -1981,6 +1987,104 @@ void PoolHttpConnection::onBackendWorkerEffort(rapidjson::Document &document)
   
   objectIncrementReference(aioObjectHandle(Socket_), 1);
   backend->accountingDb()->workerEffort(miner, worker, start, end, [this](double effort) {
+    xmstream stream;
+    reply200(stream);
+    size_t offset = startChunk(stream);
+    {
+      JSON::Object response(stream);
+      response.addString("status", "ok");
+      response.addDouble("effort", effort);
+    }
+    finishChunk(stream, offset);
+    aioWrite(Socket_, stream.data(), stream.sizeOf(), afWaitAll, 0, writeCb, this);
+    objectDecrementReference(aioObjectHandle(Socket_), 1);
+  });
+}
+
+void PoolHttpConnection::onBackendCurrentRoundEffort(rapidjson::Document &document)
+{
+  if (!document.HasMember("coin") || !document["coin"].IsString()) {
+    replyWithStatus("json_format_error");
+    return;
+  }
+  
+  std::string coin = document["coin"].GetString();
+  PoolBackend *backend = Server_.backend(coin);
+  if (!backend) {
+    replyWithStatus("invalid_coin");
+    return;
+  }
+  
+  objectIncrementReference(aioObjectHandle(Socket_), 1);
+  backend->accountingDb()->getCurrentRoundEffort([this](double effort) {
+    xmstream stream;
+    reply200(stream);
+    size_t offset = startChunk(stream);
+    {
+      JSON::Object response(stream);
+      response.addString("status", "ok");
+      response.addDouble("effort", effort);
+    }
+    finishChunk(stream, offset);
+    aioWrite(Socket_, stream.data(), stream.sizeOf(), afWaitAll, 0, writeCb, this);
+    objectDecrementReference(aioObjectHandle(Socket_), 1);
+  });
+}
+
+void PoolHttpConnection::onBackendCurrentMinerEffort(rapidjson::Document &document)
+{
+  if (!document.HasMember("coin") || !document["coin"].IsString() ||
+      !document.HasMember("miner") || !document["miner"].IsString()) {
+    replyWithStatus("json_format_error");
+    return;
+  }
+  
+  std::string coin = document["coin"].GetString();
+  std::string miner = document["miner"].GetString();
+  
+  PoolBackend *backend = Server_.backend(coin);
+  if (!backend) {
+    replyWithStatus("invalid_coin");
+    return;
+  }
+  
+  objectIncrementReference(aioObjectHandle(Socket_), 1);
+  backend->accountingDb()->getCurrentMinerRoundEffort(miner, [this](double effort) {
+    xmstream stream;
+    reply200(stream);
+    size_t offset = startChunk(stream);
+    {
+      JSON::Object response(stream);
+      response.addString("status", "ok");
+      response.addDouble("effort", effort);
+    }
+    finishChunk(stream, offset);
+    aioWrite(Socket_, stream.data(), stream.sizeOf(), afWaitAll, 0, writeCb, this);
+    objectDecrementReference(aioObjectHandle(Socket_), 1);
+  });
+}
+
+void PoolHttpConnection::onBackendCurrentWorkerEffort(rapidjson::Document &document)
+{
+  if (!document.HasMember("coin") || !document["coin"].IsString() ||
+      !document.HasMember("miner") || !document["miner"].IsString() ||
+      !document.HasMember("worker") || !document["worker"].IsString()) {
+    replyWithStatus("json_format_error");
+    return;
+  }
+  
+  std::string coin = document["coin"].GetString();
+  std::string miner = document["miner"].GetString();
+  std::string worker = document["worker"].GetString();
+  
+  PoolBackend *backend = Server_.backend(coin);
+  if (!backend) {
+    replyWithStatus("invalid_coin");
+    return;
+  }
+  
+  objectIncrementReference(aioObjectHandle(Socket_), 1);
+  backend->accountingDb()->getCurrentWorkerRoundEffort(miner, worker, [this](double effort) {
     xmstream stream;
     reply200(stream);
     size_t offset = startChunk(stream);

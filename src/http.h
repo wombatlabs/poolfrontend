@@ -70,6 +70,9 @@ private:
   void onBackendPoolEffort(rapidjson::Document &document);
   void onBackendMinerEffort(rapidjson::Document &document);
   void onBackendWorkerEffort(rapidjson::Document &document);
+  void onBackendCurrentRoundEffort(rapidjson::Document &document);
+  void onBackendCurrentMinerEffort(rapidjson::Document &document);
+  void onBackendCurrentWorkerEffort(rapidjson::Document &document);
 
   void onInstanceEnumerateAll(rapidjson::Document &document);
 
@@ -123,6 +126,9 @@ private:
     fnBackendPoolEffort,
     fnBackendMinerEffort,
     fnBackendWorkerEffort,
+    fnBackendCurrentRoundEffort,
+    fnBackendCurrentMinerEffort,
+    fnBackendCurrentWorkerEffort,
 
     // Instance functions
     fnInstanceEnumerateAll,
